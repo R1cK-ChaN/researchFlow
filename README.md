@@ -196,15 +196,125 @@ src/researchflow/
 │   ├── prompts.py            system prompt
 │   ├── provider.py           OpenRouter client
 │   └── generator.py          generate(context, params) → Report
-└── validation/
-    ├── contracts.py          Severity, ValidationIssue, ValidationReport
-    ├── postprocessor.py      post_process(report, disclaimer=...)
-    ├── judge.py              shared LLM-judge helper (OpenAI-compatible client)
-    ├── validators/           numeric_grounding, structure, citation_integrity,
-    │                         logic_consistency, house_view_reconciliation
-    └── pipeline.py           validate(report, context, judge_client=...)
-                              → ValidationReport
+├── validation/
+│   ├── contracts.py          Severity, ValidationIssue, ValidationReport
+│   ├── postprocessor.py      post_process(report, disclaimer=...)
+│   ├── judge.py              shared LLM-judge helper (OpenAI-compatible client)
+│   ├── validators/           numeric_grounding, structure, citation_integrity,
+│   │                         logic_consistency, house_view_reconciliation
+│   └── pipeline.py           validate(report, context, judge_client=...)
+│                             → ValidationReport
+└── eval/
+    ├── contracts.py          Fixture, Expected, StageScore, FixtureScorecard, RunSummary
+    ├── fixtures.py           load fixtures from eval/fixtures/*/fixture.yaml
+    ├── mock_client.py        QueueClient for deterministic replay
+    ├── runners.py            one runner per stage, returns (output, artifacts)
+    ├── scorers.py            one scorer per stage, compares to fixture.expected
+    ├── harness.py            run_fixture / run_all — writes per-stage artifacts
+    └── cli.py                `python -m researchflow.eval run|list ...`
 ```
+
+## Eval harness
+
+The harness lives outside the production flow. It runs the same
+context → generate → post-process → validate pipeline over fixtures and
+writes, for every stage, the inputs that entered the stage, the outputs
+that left it, and a trace. That's what "every step auditable" means here:
+a human or a script can reconstruct exactly what the pipeline did for
+any fixture on any run.
+
+### Fixture
+
+A fixture is a YAML file that carries the complete input state for a
+scheduled event plus declared expectations per stage:
+
+```yaml
+id: us_cpi_2026_03
+recipe: brief_comment
+params: { language: en, reader_tier: pm }
+
+inputs:
+  brief:       {...}
+  data_pack:   {event_id, payload: {facts: [...]}}
+  house_view:  {version, as_of, content: {base_case, tone_lean}}
+  extras:      {framework: {...}, exemplar_pool: [...]}
+
+expected:
+  context:      { blocks_rendered: [...], must_contain_fact_ids: [...], max_token_estimate: 4000 }
+  report:       { must_cite: [...], word_count: [150, 250], must_have_sections: [...] }
+  postprocess:  { disclaimer_injected: true }
+  validation:   { passed: true, max_errors: 0, require_codes: [], forbid_codes: [] }
+
+mock_responses:     # consumed in order: generator, then each LLM judge
+  - "## Bottom line\n...{{DISCLAIMER}}"
+  - '{"violations": []}'
+  - '{"violations": []}'
+```
+
+Any `expected.*` block is optional; the harness scores only the stages
+that have declared expectations.
+
+### Running
+
+```bash
+# List available fixtures
+python -m researchflow.eval list
+
+# Run everything (uses mock_responses; no network, deterministic)
+python -m researchflow.eval run
+
+# Single fixture, explicit run id
+python -m researchflow.eval run --fixture us_cpi_2026_03 --run-id smoke
+
+# Live-mode (no mock_responses; real OpenRouter calls):
+#   leave mock_responses: [] in the fixture and pass a real client in Python.
+```
+
+Exit code is non-zero if any fixture fails — friendly to CI.
+
+### Artifacts
+
+Every run writes an immutable tree under `eval/runs/<run_id>/`:
+
+```
+eval/runs/<run_id>/
+├── manifest.json                   run id, git commit, fixture list, pass rate
+├── summary.json                    full RunSummary
+└── <fixture_id>/
+    ├── 01_context/
+    │   ├── inputs.json             brief + data_pack + house_view + extras
+    │   ├── params.json             ContextParams
+    │   ├── output.xml              rendered context (what the LLM sees)
+    │   ├── blocks.json             per-block name / token estimate / trace
+    │   └── trace.json              ContextTrace
+    ├── 02_generation/
+    │   ├── prompt_user.xml         user-message content
+    │   ├── output.md               raw LLM output
+    │   ├── fact_citations.json     extracted [F-xxx] ids
+    │   └── trace.json              GenerationTrace (model, timing, usage)
+    ├── 03_postprocess/
+    │   ├── input.md                pre-disclaimer-injection
+    │   └── output.md               post-disclaimer-injection
+    ├── 04_validation/
+    │   ├── input.md                text validators ran against
+    │   └── report.json             ValidationReport (issues, run/skipped)
+    └── scorecard.json              per-stage pass/fail + metrics
+```
+
+`manifest.json` captures the git commit SHA so any run can be
+reproduced at the exact code state that produced it.
+
+### Scoring per stage
+
+| Stage | Metrics |
+|---|---|
+| context | blocks rendered, fact-ids present, token estimate within budget |
+| generation | required citations present, word count bounds, required sections |
+| postprocess | disclaimer placeholder replaced |
+| validation | passed flag matches, error-count bound, required/forbidden issue codes |
+
+Adding a new metric is one function in `scorers.py` and one expected key
+in the fixture — no changes to the harness or runners.
 
 ## Validation pipeline
 
@@ -247,7 +357,7 @@ for warn in vr.warnings():
 - Generator — implemented, 4 tests.
 - Post-processor — disclaimer injection landed (canonicalization deferred).
 - Validation pipeline — 3 deterministic validators + 2 LLM judges, 40 tests.
-- Eval harness over golden fixtures — final MVP piece (sits outside the flow).
+- Eval harness — per-stage runners, scorers, artifacts, CLI. 66 tests.
 
 ## License
 

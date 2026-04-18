@@ -1,0 +1,86 @@
+id: us_cpi_2026_03
+tags: [us, cpi, cold_print, spring_2026]
+recipe: brief_comment
+params:
+  language: en
+  reader_tier: pm
+
+inputs:
+  brief:
+    event_id: us_cpi_2026_03
+    event_name: "US CPI — March 2026"
+    release_time: "2026-04-10T08:30:00+00:00"
+    report_type: us_cpi
+  data_pack:
+    event_id: us_cpi_2026_03
+    payload:
+      facts:
+        - id: F-CPI-HEAD-YOY
+          label: Headline CPI YoY
+          period: "2026-03"
+          unit: "%"
+          source: bls
+          actual: 3.1
+          consensus: 3.2
+          prior: 3.0
+          tier: 1
+        - id: F-CPI-CORE-YOY
+          label: Core CPI YoY
+          period: "2026-03"
+          unit: "%"
+          source: bls
+          actual: 3.3
+          consensus: 3.3
+          prior: 3.4
+          tier: 1
+  house_view:
+    version: "2026-04-15"
+    as_of: "2026-04-15T00:00:00+00:00"
+    content:
+      base_case: "Fed cuts 75bp in 2026, first cut June."
+      tone_lean: modestly_dovish
+  extras:
+    framework:
+      sign_map:
+        - when: "headline_surprise_bp < -15"
+          expect:
+            - { asset: ust_2y, sign: "-" }
+            - { asset: dxy, sign: "-" }
+            - { asset: equities, sign: "+" }
+      glossary:
+        en:
+          supercore: { tier: 1, def: "Core services ex-shelter." }
+    exemplar_pool: []
+
+expected:
+  context:
+    blocks_rendered: [brief, fact_table, derived_metrics, framework, house_view, exemplars, style_guide]
+    must_contain_fact_ids: [F-CPI-HEAD-YOY, F-CPI-CORE-YOY]
+    max_token_estimate: 4000
+  report:
+    must_cite: [F-CPI-HEAD-YOY]
+    word_count: [150, 250]
+    must_have_sections: [bottom_line, what_happened, what_it_means]
+  postprocess:
+    disclaimer_injected: true
+  validation:
+    passed: true
+    max_errors: 0
+
+mock_responses:
+  - |
+    ## Bottom line
+
+    Headline CPI slipped to 3.1% YoY [F-CPI-HEAD-YOY], 10bp below the 3.2% consensus [F-CPI-HEAD-YOY] and above the 3.0% prior [F-CPI-HEAD-YOY]. Core was in line at 3.3% YoY [F-CPI-CORE-YOY], matching consensus [F-CPI-CORE-YOY] while easing from the 3.4% prior [F-CPI-CORE-YOY]. Print leans modestly dovish.
+
+    ## What happened
+
+    The headline surprise is driven by a broad easing across goods and services. Core held steady at 3.3% [F-CPI-CORE-YOY], consistent with a gradual normalisation rather than an inflection. Relative to the 3.0% prior [F-CPI-HEAD-YOY], headline ticked higher but remained well inside the expected range.
+
+    ## What it means
+
+    The cooler headline print reinforces our base case of 75bp in cuts through 2026, with June still plausible as the first step. The in-line core reading limits how much additional cut pricing the front end can absorb today, but the directional bias remains dovish.
+
+    {{DISCLAIMER}}
+  - '{"violations": []}'
+  - '{"violations": []}'
