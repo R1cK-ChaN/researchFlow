@@ -19,6 +19,8 @@ class Validator(Protocol):
         report: Report,
         context: Context,
         config: dict[str, Any],
+        *,
+        judge_client: Any = None,
     ) -> list[ValidationIssue]: ...
 
 

@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 from researchflow.validation import post_process, validate
-from researchflow.validation.validators.base import all_validators
+from researchflow.validation.validators.base import all_validators, get_validator
 
 
 def test_pipeline_runs_all_deterministic_validators(context, make_report):
     report = make_report("## Bottom line\nWord " * 180 + "{{DISCLAIMER}}")
     report = post_process(report)
     vr = validate(report, context)
-    assert set(vr.validators_run) == set(all_validators())
-    assert vr.validators_skipped == []
+    deterministic = {n for n in all_validators() if not get_validator(n).requires_llm}
+    llm = {n for n in all_validators() if get_validator(n).requires_llm}
+    assert set(vr.validators_run) == deterministic
+    assert {s.split()[0] for s in vr.validators_skipped} == llm
 
 
 def test_pipeline_passes_on_clean_report(context, make_report):

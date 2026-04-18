@@ -23,6 +23,8 @@ class CitationIntegrityValidator:
         report: Report,
         context: Context,
         config: dict[str, Any],
+        *,
+        judge_client: Any = None,
     ) -> list[ValidationIssue]:
         fact_map = get_fact_map(context)
         issues: list[ValidationIssue] = []

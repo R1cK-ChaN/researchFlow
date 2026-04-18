@@ -38,7 +38,9 @@ def validate(
             skipped.append(f"{name} (no judge_client)")
             continue
         run.append(name)
-        all_issues.extend(v.validate(report, context, configs.get(name, {})))
+        all_issues.extend(
+            v.validate(report, context, configs.get(name, {}), judge_client=judge_client)
+        )
 
     passed = not any(i.severity == Severity.ERROR for i in all_issues)
     return ValidationReport(

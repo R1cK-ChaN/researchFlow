@@ -33,6 +33,8 @@ class NumericGroundingValidator:
         report: Report,
         context: Context,
         config: dict[str, Any],
+        *,
+        judge_client: Any = None,
     ) -> list[ValidationIssue]:
         lookahead = int(config.get("lookahead_chars", _DEFAULT_LOOKAHEAD))
         tolerance = float(config.get("tolerance", _DEFAULT_TOLERANCE))

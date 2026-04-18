@@ -24,6 +24,8 @@ class StructureValidator:
         report: Report,
         context: Context,
         config: dict[str, Any],
+        *,
+        judge_client: Any = None,
     ) -> list[ValidationIssue]:
         guide = get_style_guide(context)
         if not guide:

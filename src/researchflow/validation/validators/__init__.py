@@ -2,6 +2,8 @@
 
 from researchflow.validation.validators import (  # noqa: F401
     citation_integrity,
+    house_view_reconciliation,
+    logic_consistency,
     numeric_grounding,
     structure,
 )

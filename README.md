@@ -199,8 +199,11 @@ src/researchflow/
 └── validation/
     ├── contracts.py          Severity, ValidationIssue, ValidationReport
     ├── postprocessor.py      post_process(report, disclaimer=...)
-    ├── validators/           numeric_grounding, structure, citation_integrity
-    └── pipeline.py           validate(report, context, ...) → ValidationReport
+    ├── judge.py              shared LLM-judge helper (OpenAI-compatible client)
+    ├── validators/           numeric_grounding, structure, citation_integrity,
+    │                         logic_consistency, house_view_reconciliation
+    └── pipeline.py           validate(report, context, judge_client=...)
+                              → ValidationReport
 ```
 
 ## Validation pipeline
@@ -213,24 +216,29 @@ Four layers, ordered cheapest-first, each producing structured issues
 | `numeric_grounding` | deterministic | decimal numbers that aren't cited, cited numbers that don't match the fact, citations to unknown fact ids |
 | `structure` | deterministic | missing or out-of-order sections, length bounds, un-injected disclaimer placeholder |
 | `citation_integrity` | deterministic | `[F-xxx]` citations that don't resolve to any fact in the context |
-| (future) LLM judges | LLM | directional/sign-map violations, unflagged divergence from house view |
+| `logic_consistency` | LLM judge | directional claims that violate the framework sign_map |
+| `house_view_reconciliation` | LLM judge | contradictions of the house view that aren't explicitly flagged as divergences |
 
-LLM judges can be added as new validators with `requires_llm = True`; the
-pipeline skips them unless a `judge_client` is passed to `validate()`.
+LLM judges use an OpenAI-compatible client (OpenRouter by default) and are
+skipped unless a `judge_client` is passed to `validate()`. They return
+WARNING-level issues rather than hard-failing; human reviewers triage.
 
 ### Usage
 
 ```python
+from researchflow.generation.provider import openrouter_client
 from researchflow.validation import post_process, validate
 
 # 1. Inject disclaimer (deterministic, safe)
 finalized = post_process(report, disclaimer="For institutional use only...")
 
-# 2. Run validators
-vr = validate(finalized, context)
+# 2. Run validators. Pass judge_client to enable LLM judges.
+vr = validate(finalized, context, judge_client=openrouter_client())
 if not vr.passed:
     for issue in vr.errors():
         print(f"[{issue.validator}:{issue.code}] {issue.message}")
+for warn in vr.warnings():
+    print(f"[WARN {warn.validator}:{warn.code}] {warn.message}")
 ```
 
 ## Status
@@ -238,9 +246,8 @@ if not vr.passed:
 - Context builder — implemented, 5 tests.
 - Generator — implemented, 4 tests.
 - Post-processor — disclaimer injection landed (canonicalization deferred).
-- Validation pipeline — 3 deterministic validators landed, 23 tests.
-- LLM judges (logic_consistency, house_view_reconciliation) — next.
-- Eval harness over golden fixtures — final MVP piece.
+- Validation pipeline — 3 deterministic validators + 2 LLM judges, 40 tests.
+- Eval harness over golden fixtures — final MVP piece (sits outside the flow).
 
 ## License
 
