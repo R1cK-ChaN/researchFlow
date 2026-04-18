@@ -1,0 +1,27 @@
+name: econ_brief_comment
+description: Short econ data flash after a scheduled release (~200 words).
+token_budget: 4000
+renderer: xml
+blocks:
+  - brief
+  - fact_table:
+      include_components: minimal
+  - derived_metrics:
+      include_components: minimal
+      surprise: true
+      prior_delta: true
+  - framework:
+      glossary: minimal
+      sign_map: true
+      transmission: false
+  - house_view:
+      depth: summary
+  - exemplars:
+      k: 2
+  - style_guide:
+      length_words: [150, 250]
+      sections:
+        - bottom_line
+        - what_happened
+        - what_it_means
+      citation_required: true

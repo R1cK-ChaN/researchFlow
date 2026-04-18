@@ -1,0 +1,30 @@
+name: econ_deep_research
+description: Long-form thematic research note (~2000 words).
+token_budget: 30000
+renderer: xml
+blocks:
+  - brief
+  - fact_table:
+      include_components: full
+  - derived_metrics:
+      include_components: full
+      surprise: true
+      prior_delta: true
+  - framework:
+      glossary: full
+      sign_map: true
+      transmission: true
+  - house_view:
+      depth: full
+  - exemplars:
+      k: 3
+  - style_guide:
+      length_words: [1800, 2500]
+      sections:
+        - executive_summary
+        - setup
+        - analysis
+        - forecast
+        - risks
+        - appendix
+      citation_required: true

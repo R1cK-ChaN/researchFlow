@@ -1,0 +1,31 @@
+name: trading_daily
+description: Daily trading desk wrap covering multiple events, market moves, levels.
+token_budget: 8000
+renderer: xml
+blocks:
+  - brief
+  - fact_table:
+      include_components: minimal
+  - derived_metrics:
+      include_components: minimal
+      surprise: true
+      prior_delta: false
+  - framework:
+      glossary: minimal
+      sign_map: true
+      transmission: false
+  - house_view:
+      depth: summary
+  - exemplars:
+      k: 1
+  - style_guide:
+      length_words: [400, 700]
+      sections:
+        - overnight
+        - session_drivers
+        - levels_to_watch
+        - flow_notes
+      citation_required: true
+      voice_notes:
+        - Desk voice, brisk, trader-oriented.
+        - Lead with market implications, not data.
