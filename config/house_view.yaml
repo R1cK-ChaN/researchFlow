@@ -1,0 +1,12 @@
+version: "2026-04-15"
+as_of: "2026-04-15T00:00:00+00:00"
+content:
+  base_case: "Fed cuts 75bp through 2026, first cut June."
+  tone_lean: modestly_dovish
+  alternatives:
+    - label: hawkish
+      prob: 0.25
+      trigger: "core CPI > 3.5% YoY for 2 consecutive prints"
+    - label: dovish
+      prob: 0.15
+      trigger: "payrolls gains <50k for 2 consecutive months"

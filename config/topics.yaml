@@ -1,0 +1,16 @@
+# Local topic-registry fallback. Keys are lowercased, whitespace-collapsed.
+# Replace with a macro-data-service calendar query when that contract lands.
+
+- topic: "us cpi march 2026"
+  brief:
+    event_id: us_cpi_2026_03
+    event_name: "US CPI — March 2026"
+    release_time: "2026-04-10T08:30:00+00:00"
+    report_type: us_cpi
+
+- topic: "us nfp april 2026"
+  brief:
+    event_id: us_nfp_2026_04
+    event_name: "US Nonfarm Payrolls — April 2026"
+    release_time: "2026-05-02T08:30:00+00:00"
+    report_type: us_nfp

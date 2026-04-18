@@ -1,0 +1,25 @@
+sign_map:
+  - when: "headline_surprise_bp < -15"
+    expect:
+      - { asset: ust_2y, sign: "-" }
+      - { asset: dxy, sign: "-" }
+      - { asset: equities, sign: "+" }
+      - { asset: cut_odds_jun, sign: "+" }
+  - when: "headline_surprise_bp > +15"
+    expect:
+      - { asset: ust_2y, sign: "+" }
+      - { asset: dxy, sign: "+" }
+      - { asset: equities, sign: "-" }
+      - { asset: cut_odds_jun, sign: "-" }
+
+transmission:
+  - "Higher CPI → higher nominal yields → stronger USD → equities under duration pressure."
+
+glossary:
+  en:
+    supercore:
+      tier: 1
+      def: "Core services inflation excluding shelter."
+    base_effect:
+      tier: 2
+      def: "Year-over-year distortion from the prior-year comparison base."

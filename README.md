@@ -204,14 +204,28 @@ src/researchflow/
 │   │                         logic_consistency, house_view_reconciliation
 │   └── pipeline.py           validate(report, context, judge_client=...)
 │                             → ValidationReport
-└── eval/
-    ├── contracts.py          Fixture, Expected, StageScore, FixtureScorecard, RunSummary
-    ├── fixtures.py           load fixtures from eval/fixtures/*/fixture.yaml
-    ├── mock_client.py        QueueClient for deterministic replay
-    ├── runners.py            one runner per stage, returns (output, artifacts)
-    ├── scorers.py            one scorer per stage, compares to fixture.expected
-    ├── harness.py            run_fixture / run_all — writes per-stage artifacts
-    └── cli.py                `python -m researchflow.eval run|list ...`
+├── eval/
+│   ├── contracts.py          Fixture, Expected, StageScore, FixtureScorecard, RunSummary
+│   ├── fixtures.py           load fixtures from eval/fixtures/*/fixture.yaml
+│   ├── mock_client.py        QueueClient for deterministic replay
+│   ├── runners.py            one runner per stage, returns (output, artifacts)
+│   ├── scorers.py            one scorer per stage, compares to fixture.expected
+│   ├── harness.py            run_fixture / run_all — writes per-stage artifacts
+│   └── cli.py                `python -m researchflow.eval run|list ...`
+├── flow.py                   run_research_flow(block_inputs, params, recipe, ...)
+│                             → FlowResult; optionally writes live audit tree
+├── resolve.py                TopicResolver + LocalRegistry (topic string → Brief)
+├── clients/                  httpx clients for macro-data-service, rag-service,
+│                             plus HouseViewLoader (YAML on disk)
+└── server/
+    ├── main.py               FastAPI app + Dependencies wiring
+    ├── config.py             pydantic-settings loaded from env / .env
+    ├── auth.py               optional Bearer-token dependency
+    ├── schemas.py            ResearchRequest, ResolveRequest, responses
+    ├── routes.py             endpoint handlers (thin; wiring only)
+    ├── resources.py          framework + exemplar + disclaimer loaders
+    ├── persistence.py        read artifacts back, whitelist path-guarded
+    └── __main__.py           `researchflow-server` console script → uvicorn
 ```
 
 ## Eval harness
@@ -316,6 +330,99 @@ reproduced at the exact code state that produced it.
 Adding a new metric is one function in `scorers.py` and one expected key
 in the fixture — no changes to the harness or runners.
 
+## HTTP service
+
+The same pipeline runs as a FastAPI service. Callers send the minimum
+they naturally know — a raw topic string and a recipe name; the service
+resolves the topic to a canonical Brief, fetches the DataPack from
+`macro-data-service` and the MaterialPack from `rag-service`, calls
+OpenRouter, post-processes, validates, and returns the report plus a
+stage-by-stage summary. Every run writes the same audit tree the eval
+harness produces.
+
+### Install with service extras
+
+```bash
+pip install -e ".[service]"
+```
+
+Pulls `fastapi`, `uvicorn[standard]`, `httpx`, `pydantic-settings`.
+
+### Configuration (env / .env)
+
+| Var | Purpose |
+|---|---|
+| `RESEARCHFLOW_API_TOKEN` | Optional inbound bearer token; unset = open |
+| `ANALYST_MACRO_DATA_BASE_URL` / `_API_TOKEN` | macro-data-service |
+| `ANALYST_RAG_BASE_URL` / `_API_TOKEN` | rag-service |
+| `OPENROUTER_API_KEY` | required to generate reports |
+| `OPENROUTER_GENERATOR_MODEL` | default `anthropic/claude-sonnet-4.5` |
+| `OPENROUTER_JUDGE_MODEL` | default `anthropic/claude-haiku-4.5` |
+| `RESEARCHFLOW_RUNS_DIR` | live audit tree (default `eval/runs/live`) |
+| `HOUSE_VIEW_PATH` | YAML (default `config/house_view.yaml`) |
+| `TOPIC_REGISTRY_PATH` | YAML (default `config/topics.yaml`) |
+| `FRAMEWORK_DIR` | per-report-type YAMLs (default `config/frameworks`) |
+| `EXEMPLAR_DIR` | per-report-type JSON files (default `config/exemplars`) |
+| `DISCLAIMER_PATH` | plain-text disclaimer; optional |
+
+### Endpoints
+
+| Method + path | What |
+|---|---|
+| `POST /v1/research` | Topic → validated report + stage summary |
+| `POST /v1/topics/resolve` | Topic → canonical Brief (for disambiguation) |
+| `GET /v1/recipes` | List packaged recipes |
+| `GET /v1/research/runs/{run_id}` | Per-run flow summary JSON |
+| `GET /v1/research/runs/{run_id}/{stage}/{artifact}` | One audit artifact |
+| `GET /v1/health` | Liveness + per-dependency readiness |
+
+### Minimum-knowledge client
+
+```bash
+curl -X POST http://localhost:8000/v1/research \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <optional>' \
+  -d '{
+    "topic": "US CPI March 2026",
+    "recipe": "brief_comment",
+    "params": {"language": "en", "reader_tier": "pm"}
+  }'
+```
+
+Response carries `{ run_id, resolved_brief, report, validation, stage_summary, run_dir }`.
+All stage artifacts are available at `/v1/research/runs/{run_id}/...` and on disk
+under `${RESEARCHFLOW_RUNS_DIR}/{run_id}/`.
+
+### Library-mode passthrough
+
+When the caller already has a fully-assembled `BlockInputs` (e.g. replaying
+a fixture, or testing without sibling services), send it under
+`inputs_override` — the service skips topic resolution and sibling fetches:
+
+```json
+{
+  "topic": "n/a",
+  "recipe": "brief_comment",
+  "inputs_override": {
+    "brief": {...},
+    "data_pack": {"event_id": "...", "payload": {"facts": [...]}},
+    "house_view": {...},
+    "extras": {"framework": {...}, "exemplar_pool": []}
+  }
+}
+```
+
+### Run it
+
+```bash
+researchflow-server        # console script → uvicorn on 0.0.0.0:8000
+# or:
+uvicorn researchflow.server.main:app --reload
+# or:
+docker build -t researchflow-api . && \
+  docker run -p 8000:8000 --env-file .env researchflow-api
+```
+
 ## Validation pipeline
 
 Four layers, ordered cheapest-first, each producing structured issues
@@ -357,7 +464,9 @@ for warn in vr.warnings():
 - Generator — implemented, 4 tests.
 - Post-processor — disclaimer injection landed (canonicalization deferred).
 - Validation pipeline — 3 deterministic validators + 2 LLM judges, 40 tests.
-- Eval harness — per-stage runners, scorers, artifacts, CLI. 66 tests.
+- Eval harness — per-stage runners, scorers, artifacts, CLI.
+- HTTP service — FastAPI wrapper, sibling clients, topic resolver, auth, Docker.
+  93 tests across all layers.
 
 ## License
 

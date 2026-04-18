@@ -18,6 +18,15 @@ dev = [
     "pytest>=8",
     "ruff>=0.5",
 ]
+service = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "httpx>=0.27",
+    "pydantic-settings>=2.2",
+]
+
+[project.scripts]
+researchflow-server = "researchflow.server.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
