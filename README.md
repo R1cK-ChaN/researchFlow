@@ -191,21 +191,55 @@ src/researchflow/
 │   ├── recipe_loader.py      YAML → Recipe
 │   ├── recipes/              brief_comment, deep_research, trading_daily
 │   └── assembler.py          build(recipe, params, inputs) → Context
-└── generation/
-    ├── contracts.py          GeneratorParams, Report, GenerationTrace
-    ├── prompts.py            system prompt
-    ├── provider.py           OpenRouter client
-    └── generator.py          generate(context, params) → Report
+├── generation/
+│   ├── contracts.py          GeneratorParams, Report, GenerationTrace
+│   ├── prompts.py            system prompt
+│   ├── provider.py           OpenRouter client
+│   └── generator.py          generate(context, params) → Report
+└── validation/
+    ├── contracts.py          Severity, ValidationIssue, ValidationReport
+    ├── postprocessor.py      post_process(report, disclaimer=...)
+    ├── validators/           numeric_grounding, structure, citation_integrity
+    └── pipeline.py           validate(report, context, ...) → ValidationReport
+```
+
+## Validation pipeline
+
+Four layers, ordered cheapest-first, each producing structured issues
+(`error` hard-fails the report; `warning` flags for human review):
+
+| Validator | Kind | Catches |
+|---|---|---|
+| `numeric_grounding` | deterministic | decimal numbers that aren't cited, cited numbers that don't match the fact, citations to unknown fact ids |
+| `structure` | deterministic | missing or out-of-order sections, length bounds, un-injected disclaimer placeholder |
+| `citation_integrity` | deterministic | `[F-xxx]` citations that don't resolve to any fact in the context |
+| (future) LLM judges | LLM | directional/sign-map violations, unflagged divergence from house view |
+
+LLM judges can be added as new validators with `requires_llm = True`; the
+pipeline skips them unless a `judge_client` is passed to `validate()`.
+
+### Usage
+
+```python
+from researchflow.validation import post_process, validate
+
+# 1. Inject disclaimer (deterministic, safe)
+finalized = post_process(report, disclaimer="For institutional use only...")
+
+# 2. Run validators
+vr = validate(finalized, context)
+if not vr.passed:
+    for issue in vr.errors():
+        print(f"[{issue.validator}:{issue.code}] {issue.message}")
 ```
 
 ## Status
 
 - Context builder — implemented, 5 tests.
 - Generator — implemented, 4 tests.
-- Post-processor (citation validation, number canonicalization, disclaimer
-  injection) — next.
-- Validation pipeline (numeric grounding, structure, logic judge, house-view
-  judge) — after that.
+- Post-processor — disclaimer injection landed (canonicalization deferred).
+- Validation pipeline — 3 deterministic validators landed, 23 tests.
+- LLM judges (logic_consistency, house_view_reconciliation) — next.
 - Eval harness over golden fixtures — final MVP piece.
 
 ## License
